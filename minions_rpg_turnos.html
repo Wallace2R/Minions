@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minion Mayhem: RPG de Turnos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    .font-heading {
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: rgba(250, 204, 21, 0.5);
+      box-shadow: 0 10px 25px -5px rgba(250, 204, 21, 0.25);
+    }
+
+    /* Animações Flutuantes */
+    .floating-text {
+      position: absolute;
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.4rem;
+      pointer-events: none;
+      animation: floatUp 1.2s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+      z-index: 60;
+      text-shadow: 0 3px 8px rgba(0,0,0,0.9);
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translateY(10px) scale(0.7); }
+      20% { opacity: 1; transform: translateY(-20px) scale(1.2); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1); }
+    }
+
+    .hit-shake {
+      animation: shake 0.35s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-12px) rotate(-3deg); }
+      50% { transform: translateX(12px) rotate(3deg); }
+      75% { transform: translateX(-6px) rotate(-1deg); }
+    }
+
+    .lunge-p1 {
+      animation: lungeP1 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes lungeP1 {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(50px) scale(1.05); }
+    }
+
+    .lunge-p2 {
+      animation: lungeP2 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes lungeP2 {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(-50px) scale(1.05); }
+    }
+
+    /* Interação com as Cartas da Mão */
+    .card-hand-item {
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      cursor: pointer;
+    }
+
+    .card-hand-item:hover {
+      transform: translateY(-12px) scale(1.05);
+      z-index: 30;
+      box-shadow: 0 12px 24px -4px rgba(250, 204, 21, 0.35);
+    }
+
+    .card-hand-item:active {
+      transform: translateY(-4px) scale(1.01);
+    }
+
+    /* Efeitos Visuais de Status */
+    .status-shrunk {
+      transform: scale(0.68) !important;
+      transition: transform 0.4s ease;
+    }
+
+    .status-frozen {
+      filter: hue-rotate(180deg) brightness(1.2) contrast(1.1);
+    }
+
+    .status-poisoned {
+      filter: sepia(0.8) hue-rotate(90deg) saturate(2.5);
+    }
+
+    .status-burning {
+      animation: burnGlow 0.8s infinite alternate;
+    }
+    @keyframes burnGlow {
+      from { filter: drop-shadow(0 0 4px #f97316); }
+      to { filter: drop-shadow(0 0 16px #ef4444); }
+    }
+
+    /* Modal Animation */
+    .card-pop {
+      animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between relative overflow-x-hidden bg-slate-950 text-slate-100">
+
+  <!-- Fundo Animado Canvas -->
+  <canvas id="bgCanvas" class="absolute inset-0 w-full h-full pointer-events-none opacity-20 z-0"></canvas>
+
+  <!-- Canvas para Efeitos Visuais de Disparos -->
+  <canvas id="fxCanvas" class="absolute inset-0 w-full h-full pointer-events-none z-40"></canvas>
+
+  <!-- CABEÇALHO -->
+  <header class="relative z-10 w-full py-2.5 px-6 glass-panel border-b border-amber-500/20 flex justify-between items-center shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-2xl bg-amber-400 flex items-center justify-center font-heading text-slate-950 text-xl font-black shadow-lg shadow-amber-400/20">
+        🍌
+      </div>
+      <div>
+        <h1 class="font-heading text-xl md:text-2xl font-black tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500">
+          MINION MAYHEM
+        </h1>
+        <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Laboratório do Gru • RPG de Turnos</p>
+      </div>
+    </div>
+
+    <div id="gameHeaderActions" class="hidden flex gap-2">
+      <button onclick="confirmExitToMenu()" class="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 border border-slate-700 transition">
+        ⚙️ Menu Principal
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTAINER PRINCIPAL -->
+  <main class="relative z-10 flex-grow flex flex-col items-center justify-center p-2 md:p-4 max-w-7xl mx-auto w-full">
+
+    <!-- 1. TELA: MENU PRINCIPAL -->
+    <section id="screenMenu" class="w-full max-w-md flex flex-col items-center text-center gap-5 glass-panel p-6 md:p-8 rounded-3xl shadow-2xl border border-amber-500/30 my-auto">
+      <div class="w-20 h-20 mx-auto bg-gradient-to-tr from-amber-400 to-yellow-300 rounded-3xl flex items-center justify-center shadow-xl shadow-amber-500/30 border-2 border-slate-900">
+        <svg class="w-14 h-14" viewBox="0 0 100 100">
+          <rect x="25" y="20" width="50" height="60" rx="25" fill="#facc15" />
+          <rect x="25" y="48" width="50" height="15" fill="#2563eb" />
+          <circle cx="50" cy="35" r="14" fill="#64748b" />
+          <circle cx="50" cy="35" r="10" fill="#ffffff" />
+          <circle cx="50" cy="35" r="4" fill="#0f172a" />
+          <path d="M 40 58 Q 50 65 60 58" stroke="#0f172a" stroke-width="3" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div>
+        <h2 class="font-heading text-2xl md:text-3xl font-extrabold text-white">Escolha o Modo</h2>
+        <p class="text-slate-300 text-xs mt-1">Treine suas habilidades ou batalhe localmente!</p>
+      </div>
+
+      <div class="flex flex-col w-full gap-3">
+        <button onclick="startMode('pve')" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-heading font-extrabold text-base shadow-lg shadow-amber-500/20 transition active:scale-95 flex items-center justify-center gap-2">
+          <span>🤖</span> Modo Treino PvE (vs IA)
+        </button>
+
+        <button onclick="startMode('pvp')" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-heading font-extrabold text-base shadow-lg shadow-purple-600/25 transition active:scale-95 flex items-center justify-center gap-2">
+          <span>⚔️</span> Duelo PvP 1v1 Local
+        </button>
+      </div>
+
+      <div class="w-full text-left bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-[11px] text-slate-300 space-y-1">
+        <p class="font-bold text-amber-400 uppercase tracking-wider text-center mb-1">🎴 Novas Regras de Combate</p>
+        <p>• <strong>Cura Automática:</strong> Começa com 0 Stamina e ganha +10 por turno. Se o HP estiver abaixo do máximo, consome Stamina para se curar automaticamente (5 Sta ➔ 5 HP)!</p>
+        <p>• <strong>Deck de 6 Armas:</strong> Apenas as 6 armas oficiais do laboratório no baralho. Ao jogar 1 carta, ela vai para o Lixo e é reposta. Quando as 6 forem jogadas, o Lixo reembaralha!</p>
+      </div>
+    </section>
+
+    <!-- 2. TELA: SELEÇÃO DE PERSONAGENS -->
+    <section id="screenSelect" class="hidden w-full flex-col gap-4 glass-panel p-5 md:p-6 rounded-3xl border border-amber-500/30">
+      <div class="text-center space-y-1">
+        <span id="selectStepBadge" class="px-3 py-1 bg-amber-400/20 text-amber-300 border border-amber-400/40 text-xs font-bold rounded-full uppercase">Passo 1</span>
+        <h2 id="selectTitle" class="font-heading text-xl md:text-2xl font-extrabold text-white">Jogador 1: Escolha seu Minion</h2>
+        <p class="text-xs text-slate-400">Analise os atributos de Altura, Olhos e Passivas únicas.</p>
+      </div>
+
+      <div id="characterGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <!-- Cards inseridos via JS -->
+      </div>
+
+      <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+        <button onclick="resetToMenu()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300">
+          ← Cancelar
+        </button>
+        <button id="btnConfirmSelect" disabled onclick="confirmSelection()" class="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-heading font-bold text-sm shadow-lg transition">
+          Confirmar Escolha ➔
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. TELA: ARENA DE BATALHA -->
+    <section id="screenBattle" class="hidden w-full flex-col gap-3">
+
+      <!-- ARENA / PALCO DE COMBATE -->
+      <div id="battleStage" class="w-full glass-panel rounded-3xl p-3 md:p-4 min-h-[360px] md:min-h-[400px] flex justify-between items-end relative overflow-hidden bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950 border border-slate-800">
+        
+        <!-- Indicador de Turno -->
+        <div class="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-1 rounded-full bg-slate-900/90 border border-amber-500/40 shadow-xl flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+          <span id="turnIndicatorText" class="font-heading text-xs font-bold uppercase tracking-wider text-amber-300">Turno 1</span>
+        </div>
+
+        <!-- ================= PLAYER 1 (ESQUERDA) ================= -->
+        <div id="p1SpriteWrap" class="relative flex flex-col items-center z-20 w-40 md:w-48 transition-all">
+          
+          <!-- BARRAS DE STATUS DIRETAMENTE ACIMA DO MINION P1 -->
+          <div class="w-full glass-panel p-2 rounded-2xl mb-2 border border-amber-400/40 bg-slate-900/90 shadow-xl backdrop-blur-md">
+            <div class="flex justify-between items-center mb-1">
+              <span id="p1Name" class="font-heading text-xs font-bold text-amber-300 truncate">Stuart</span>
+              <span id="p1Tag" class="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-bold rounded border border-amber-500/30">P1</span>
+            </div>
+
+            <!-- Vida (HP) -->
+            <div class="space-y-0.5 mb-1">
+              <div class="flex justify-between text-[10px] font-bold text-slate-300">
+                <span>HP</span>
+                <span id="p1HpText">180 / 180</span>
+              </div>
+              <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                <div id="p1HpBar" class="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all duration-300" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Stamina -->
+            <div class="space-y-0.5">
+              <div class="flex justify-between text-[10px] font-bold text-slate-400">
+                <span>Stamina (+10/t)</span>
+                <span id="p1StaminaText">220 / 220</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                <div id="p1StaminaBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Badges de Status P1 -->
+            <div id="p1Buffs" class="flex flex-wrap gap-1 mt-1 min-h-[14px]"></div>
+          </div>
+
+          <!-- SPRITE VISUAL P1 -->
+          <div id="p1FloatingBox" class="relative w-full h-40 md:h-48 flex items-end justify-center">
+            <div id="p1Sprite" class="w-full h-full flex items-center justify-center"></div>
+          </div>
+          <div class="w-24 h-3 bg-black/50 rounded-full blur-sm mt-1"></div>
+        </div>
+
+        <!-- BARALHO DE COMPRA E PILHA DE LIXO NA DIREITA DA ARENA -->
+        <div class="absolute right-3 top-12 md:top-14 z-20 flex flex-col gap-2.5 items-center bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+          <!-- BARALHO DE COMPRA (DECK) -->
+          <div class="flex flex-col items-center">
+            <div class="relative w-12 h-16 rounded-xl bg-gradient-to-tr from-amber-600 to-yellow-500 border-2 border-amber-300 flex flex-col items-center justify-center shadow-lg transform -rotate-3 hover:rotate-0 transition">
+              <span class="text-xs">🎴</span>
+              <span id="deckCountBadge" class="font-heading font-black text-xs text-slate-950 bg-amber-300 px-1.5 py-0.2 rounded-full mt-0.5">14</span>
+            </div>
+            <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Baralho</span>
+          </div>
+
+          <!-- PILHA DE LIXO / DESCARTE -->
+          <div class="flex flex-col items-center">
+            <div class="relative w-12 h-16 rounded-xl bg-slate-800 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center shadow-inner">
+              <span class="text-xs">🗑️</span>
+              <span id="trashCountBadge" class="font-heading font-bold text-xs text-slate-300 mt-0.5">0</span>
+            </div>
+            <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Lixo</span>
+          </div>
+        </div>
+
+        <!-- ================= PLAYER 2 (DIREITA) ================= -->
+        <div id="p2SpriteWrap" class="relative flex flex-col items-center z-20 w-40 md:w-48 transition-all">
+          
+          <!-- BARRAS DE STATUS DIRETAMENTE ACIMA DO MINION P2 -->
+          <div class="w-full glass-panel p-2 rounded-2xl mb-2 border border-purple-500/40 bg-slate-900/90 shadow-xl backdrop-blur-md">
+            <div class="flex justify-between items-center mb-1">
+              <span id="p2Tag" class="text-[9px] px-1.5 py-0.2 bg-purple-500/20 text-purple-300 font-bold rounded border border-purple-500/30">P2</span>
+              <span id="p2Name" class="font-heading text-xs font-bold text-purple-300 truncate">Minion Roxo</span>
+            </div>
+
+            <!-- Vida (HP) -->
+            <div class="space-y-0.5 mb-1">
+              <div class="flex justify-between text-[10px] font-bold text-slate-300">
+                <span>HP</span>
+                <span id="p2HpText">220 / 220</span>
+              </div>
+              <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                <div id="p2HpBar" class="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all duration-300" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Stamina -->
+            <div class="space-y-0.5">
+              <div class="flex justify-between text-[10px] font-bold text-slate-400">
+                <span>Stamina (+10/t)</span>
+                <span id="p2StaminaText">180 / 180</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                <div id="p2StaminaBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300" style="width: 100%;"></div>
+              </div>
+            </div>
+
+            <!-- Badges de Status P2 -->
+            <div id="p2Buffs" class="flex flex-wrap gap-1 mt-1 min-h-[14px] justify-end"></div>
+          </div>
+
+          <!-- SPRITE VISUAL P2 -->
+          <div id="p2FloatingBox" class="relative w-full h-40 md:h-48 flex items-end justify-center">
+            <div id="p2Sprite" class="w-full h-full flex items-center justify-center scale-x-[-1]"></div>
+          </div>
+          <div class="w-24 h-3 bg-black/50 rounded-full blur-sm mt-1"></div>
+        </div>
+
+      </div>
+
+      <!-- COMBAT LOG COMPACTO (MEIO) -->
+      <div class="w-full glass-panel rounded-2xl p-2.5 border border-slate-800 flex flex-col h-20">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-heading text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+            📜 Combat Log
+          </span>
+          <span id="activePlayerControlText" class="text-[10px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
+            Vez do P1
+          </span>
+        </div>
+        <div id="combatLog" class="flex-grow overflow-y-auto space-y-1 text-[11px] pr-1">
+          <div class="text-slate-400 italic">O combate iniciou!</div>
+        </div>
+      </div>
+
+      <!-- CARTAS DA MÃO (RODAPÉ CENTRALIZADO - EXATAMENTE 3 CARTAS) -->
+      <div class="w-full glass-panel p-3 rounded-3xl border border-slate-800 flex flex-col items-center">
+        <div class="flex justify-between items-center w-full mb-2 px-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            🃏 Sua Mão (Escolha 1 Arma)
+          </span>
+          <button onclick="handleAction('pass')" id="btnPassTurn" class="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition">
+            🛡️ Passar Vez
+          </button>
+        </div>
+
+        <!-- CONTAINER DAS 3 CARTAS -->
+        <div id="cardsHandContainer" class="flex justify-center items-center gap-3 w-full max-w-2xl py-1">
+          <!-- As 3 Cartas mantidas na mão -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL DE FINAL DE JOGO -->
+  <div id="modalGameOver" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-panel max-w-sm w-full p-6 rounded-3xl text-center border-2 border-amber-400 shadow-2xl space-y-4 card-pop">
+      <div class="w-14 h-14 mx-auto rounded-full bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center text-3xl shadow-inner">
+        🏆
+      </div>
+      <div>
+        <h2 id="winnerTitle" class="font-heading text-2xl font-black text-amber-300">Vitória!</h2>
+        <p id="winnerDesc" class="text-slate-300 text-xs mt-1">O Minion dominou o laboratório!</p>
+      </div>
+
+      <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1">
+        <div class="flex justify-between">
+          <span>Turnos Jogados:</span>
+          <span id="statTurnCount" class="font-bold text-amber-300">0</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Cartas Usadas:</span>
+          <span id="statCardsUsed" class="font-bold text-amber-300">0</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="resetToMenu()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-heading font-bold text-xs border border-slate-700">
+          Menu Principal
+        </button>
+        <button onclick="restartBattle()" class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs shadow-md">
+          Jogar Novamente
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="relative z-10 py-2 text-center text-[10px] text-slate-500 border-t border-slate-900">
+    Minion Mayhem RPG Turnos • Baralho & Descarte
+  </footer>
+
+  <script>
+    /* ===================================================================
+       1. GERADOR DE SVG DOS MINIONS E ATRIBUTOS
+       =================================================================== */
+    function generateMinionSVG(name, eyes, isPurple, bodyHeight, customClass = "") {
+      const bodyColor = isPurple ? "#a855f7" : "#facc15";
+      const suitColor = isPurple ? "#4c1d95" : "#1d4ed8";
+      const hVal = bodyHeight === 'Alto' ? 135 : (bodyHeight === 'Médio' ? 115 : 95);
+      const yOffset = 145 - hVal;
+
+      let hair = "";
+      if (isPurple) {
+        hair = `<path d="M 30 ${yOffset} Q 15 ${yOffset-30} 5 ${yOffset-35} M 50 ${yOffset} Q 50 ${yOffset-35} 48 ${yOffset-45} M 70 ${yOffset} Q 85 ${yOffset-30} 95 ${yOffset-35}" stroke="#a855f7" stroke-width="7" stroke-linecap="round" fill="none" />`;
+      } else if (name === 'Stuart') {
+        hair = `<path d="M 42 ${yOffset+5} Q 50 ${yOffset-12} 58 ${yOffset+5}" stroke="#1e293b" stroke-width="3" fill="none" />`;
+      } else if (name === 'Kevin') {
+        hair = `<path d="M 48 ${yOffset+5} L 48 ${yOffset-12} M 52 ${yOffset+5} L 52 ${yOffset-12}" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" />`;
+      }
+
+      let eyeGoggles = "";
+      if (eyes === 1) {
+        eyeGoggles = `
+          <rect x="15" y="${yOffset + 28}" width="70" height="10" fill="#475569" rx="2" />
+          <circle cx="50" cy="${yOffset + 33}" r="20" fill="#94a3b8" />
+          <circle cx="50" cy="${yOffset + 33}" r="15" fill="#ffffff" />
+          <circle cx="50" cy="${yOffset + 33}" r="6" fill="${isPurple ? '#ef4444' : '#451a03'}" />
+          <circle cx="52" cy="${yOffset + 31}" r="2" fill="#ffffff" />
+        `;
+      } else {
+        eyeGoggles = `
+          <rect x="12" y="${yOffset + 28}" width="76" height="10" fill="#475569" rx="2" />
+          <circle cx="36" cy="${yOffset + 33}" r="15" fill="#94a3b8" />
+          <circle cx="36" cy="${yOffset + 33}" r="11" fill="#ffffff" />
+          <circle cx="36" cy="${yOffset + 33}" r="5" fill="${isPurple ? '#ef4444' : '#451a03'}" />
+          <circle cx="38" cy="${yOffset + 31}" r="1.8" fill="#ffffff" />
+
+          <circle cx="64" cy="${yOffset + 33}" r="15" fill="#94a3b8" />
+          <circle cx="64" cy="${yOffset + 33}" r="11" fill="#ffffff" />
+          <circle cx="64" cy="${yOffset + 33}" r="5" fill="${isPurple ? '#ef4444' : '#451a03'}" />
+          <circle cx="66" cy="${yOffset + 31}" r="1.8" fill="#ffffff" />
+        `;
+      }
+
+      let mouth = `<path d="M 38 ${yOffset + 68} Q 50 ${isPurple ? yOffset + 55 : yOffset + 78} 62 ${yOffset + 68}" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round" fill="${isPurple ? '#7f1d1d' : 'none'}" />`;
+
+      return `
+        <svg class="w-full h-full drop-shadow-md ${customClass}" viewBox="0 0 100 160" xmlns="http://www.w3.org/2000/svg">
+          ${hair}
+          <rect x="22" y="${yOffset}" width="56" height="${hVal}" rx="28" fill="${bodyColor}" />
+          <path d="M 22 ${yOffset + hVal - 40} Q 22 ${yOffset + hVal - 8} 32 ${yOffset + hVal} L 68 ${yOffset + hVal} Q 78 ${yOffset + hVal - 8} 78 ${yOffset + hVal - 40} Z" fill="${suitColor}" />
+          <rect x="34" y="${yOffset + hVal - 48}" width="32" height="20" fill="${suitColor}" rx="2" />
+          ${eyeGoggles}
+          ${mouth}
+          <path d="M 20 ${yOffset + 52} Q 10 ${yOffset + 70} 15 ${yOffset + 85}" stroke="${bodyColor}" stroke-width="7" stroke-linecap="round" fill="none" />
+          <path d="M 80 ${yOffset + 52} Q 90 ${yOffset + 70} 85 ${yOffset + 85}" stroke="${bodyColor}" stroke-width="7" stroke-linecap="round" fill="none" />
+          <circle cx="15" cy="${yOffset + 85}" r="5.5" fill="#0f172a" />
+          <circle cx="85" cy="${yOffset + 85}" r="5.5" fill="#0f172a" />
+          <rect x="30" y="${yOffset + hVal - 1}" width="15" height="10" fill="#0f172a" rx="3" />
+          <rect x="55" y="${yOffset + hVal - 1}" width="15" height="10" fill="#0f172a" rx="3" />
+        </svg>
+      `;
+    }
+
+    const MINION_TEMPLATES = [
+      {
+        id: 'stuart', name: 'Stuart', eyes: 1, height: 'Pequeno', isPurple: false,
+        maxHp: 180, maxStamina: 220, attack: 25, defense: 12, initiative: 18,
+        critChance: 15, dodgeChance: 10,
+        desc: 'Pequeno e ágil. 180 HP, 0 Sta inicial (máx 220). +15% Crit / +10% Esquiva.'
+      },
+      {
+        id: 'mel', name: 'Mel', eyes: 1, height: 'Médio', isPurple: false,
+        maxHp: 200, maxStamina: 200, attack: 23, defense: 15, initiative: 15,
+        critChance: 15, dodgeChance: 10,
+        desc: 'Porte Médio. 200 HP, 0 Sta inicial (máx 200). +15% Crit / +10% Esquiva.'
+      },
+      {
+        id: 'bob', name: 'Bob', eyes: 1, height: 'Alto', isPurple: false,
+        maxHp: 220, maxStamina: 180, attack: 21, defense: 18, initiative: 12,
+        critChance: 15, dodgeChance: 10,
+        desc: 'Porte Alto. 220 HP, 0 Sta inicial (máx 180). +15% Crit / +10% Esquiva.'
+      },
+      {
+        id: 'dave', name: 'Dave', eyes: 2, height: 'Pequeno', isPurple: false,
+        maxHp: 180, maxStamina: 220, attack: 25, defense: 12, initiative: 18,
+        critChance: 10, dodgeChance: 15,
+        desc: '2 Olhos. 180 HP, 0 Sta inicial (máx 220). +15% Esquiva / +10% Crit.'
+      },
+      {
+        id: 'kevin', name: 'Kevin', eyes: 2, height: 'Médio', isPurple: false,
+        maxHp: 200, maxStamina: 200, attack: 23, defense: 15, initiative: 15,
+        critChance: 10, dodgeChance: 15,
+        desc: 'Estrategista. 200 HP, 0 Sta inicial (máx 200). +15% Esquiva / +10% Crit.'
+      },
+      {
+        id: 'purple', name: 'Minion Roxo', eyes: 2, height: 'Alto', isPurple: true,
+        maxHp: 220, maxStamina: 180, attack: 27, defense: 18, initiative: 12,
+        critChance: 10, dodgeChance: 15,
+        desc: 'Mutante pesado. 220 HP, 0 Sta inicial (máx 180). +15% Esquiva / +10% Crit.'
+      }
+    ];
+
+    /* DECK COMPLETO - APENAS AS 6 ARMAS OFICIAIS DO GAME (SEM CARTAS DE CURA OU ESCUDO) */
+    const WEAPON_DECK_PROTOTYPE = [
+      {
+        id: 'fart_gun', name: 'Arma Peido', icon: '💨',
+        color: 'from-emerald-700 to-green-800', borderColor: 'border-emerald-400',
+        type: 'DOT_POISON', damageLabel: 'Baixo / Contínuo',
+        desc: 'Aplica veneno causando 14 de dano por turno durante 3 turnos.'
+      },
+      {
+        id: 'shrink_ray', name: 'Raio Encolher', icon: '🔬',
+        color: 'from-amber-700 to-yellow-800', borderColor: 'border-amber-400',
+        type: 'DEBUFF_SHRINK', damageLabel: 'Nulo (Debuff)',
+        desc: 'Encolhe o inimigo e reduz Seus atributos de ataque/defesa em 35%.'
+      },
+      {
+        id: 'freeze_ray', name: 'Raio Congelar', icon: '❄️',
+        color: 'from-cyan-700 to-blue-800', borderColor: 'border-cyan-400',
+        type: 'STUN_FREEZE', damageLabel: 'Nulo (Controle)',
+        desc: 'Congela o inimigo fazendo-o pular o próximo turno.'
+      },
+      {
+        id: 'jelly_launcher', name: 'Lança-Geléia', icon: '🍯',
+        color: 'from-pink-700 to-rose-800', borderColor: 'border-pink-400',
+        type: 'DEBUFF_JELLY', damageLabel: 'Baixo / Residual',
+        desc: 'Aplica 10 de dano e anula a Esquiva do alvo por 2 turnos.'
+      },
+      {
+        id: 'plunger_gun', name: 'Desentupidor', icon: '🪠',
+        color: 'from-yellow-800 to-amber-900', borderColor: 'border-yellow-600',
+        type: 'DOT_BLEED', damageLabel: 'Médio / Contínuo',
+        desc: 'Causa sangria de 18 de dano por turno durante 2 turnos.'
+      },
+      {
+        id: 'lava_gun', name: 'Arma de Lava', icon: '🌋',
+        color: 'from-orange-700 to-red-800', borderColor: 'border-orange-500',
+        type: 'DOT_BURN', damageLabel: 'Alto / Contínuo',
+        desc: 'Queimadura de lava: 26 de dano por turno por 2 turnos.'
+      }
+    ];
+
+    /* ===================================================================
+       2. VARIÁVEIS DE ESTADO DO JOGO
+       =================================================================== */
+    let gameMode = 'pve';
+    let selectStep = 1;
+    let selectedP1Id = null;
+    let selectedP2Id = null;
+
+    let p1 = null;
+    let p2 = null;
+
+    let currentTurn = 1;
+    let turnNumber = 1;
+    let totalCardsUsed = 0;
+    let isProcessingAction = false;
+
+    // BARALHO E PILHAS COMPARTILHADAS DE COMBATE
+    let drawDeck = [];
+    let trashDeck = [];
+    let playerHand = []; // Mão fixa com exatamente 3 cartas
+
+    /* ===================================================================
+       3. INICIALIZAÇÃO DA INTERFACE
+       =================================================================== */
+    window.onload = function() {
+      initBgCanvas();
+      renderCharacterGrid();
+    };
+
+    function startMode(mode) {
+      gameMode = mode;
+      selectStep = 1;
+      selectedP1Id = null;
+      selectedP2Id = null;
+
+      document.getElementById('screenMenu').classList.add('hidden');
+      document.getElementById('screenSelect').classList.remove('hidden');
+      document.getElementById('screenSelect').classList.add('flex');
+
+      updateSelectUI();
+    }
+
+    function resetToMenu() {
+      document.getElementById('screenMenu').classList.remove('hidden');
+      document.getElementById('screenSelect').classList.add('hidden');
+      document.getElementById('screenBattle').classList.add('hidden');
+      document.getElementById('modalGameOver').classList.add('hidden');
+      document.getElementById('gameHeaderActions').classList.add('hidden');
+    }
+
+    function confirmExitToMenu() {
+      if (confirm("Deseja voltar ao menu e encerrar a partida?")) {
+        resetToMenu();
+      }
+    }
+
+    function updateSelectUI() {
+      const badge = document.getElementById('selectStepBadge');
+      const title = document.getElementById('selectTitle');
+      const btnConfirm = document.getElementById('btnConfirmSelect');
+
+      btnConfirm.disabled = true;
+
+      if (selectStep === 1) {
+        badge.innerText = "Passo 1";
+        title.innerText = "Jogador 1: Escolha seu Minion";
+      } else {
+        badge.innerText = "Passo 2";
+        title.innerText = gameMode === 'pve' ? "Escolha o Minion Oponente (IA)" : "Jogador 2: Escolha seu Minion";
+      }
+
+      document.querySelectorAll('.char-card').forEach(c => {
+        c.classList.remove('ring-4', 'ring-amber-400', 'bg-amber-500/10');
+      });
+    }
+
+    function renderCharacterGrid() {
+      const grid = document.getElementById('characterGrid');
+      grid.innerHTML = '';
+
+      MINION_TEMPLATES.forEach(m => {
+        const card = document.createElement('div');
+        card.className = `char-card glass-card p-3 rounded-2xl cursor-pointer flex flex-col justify-between border border-slate-700/60`;
+        card.onclick = () => selectCharCard(m.id, card);
+
+        const svgMarkup = generateMinionSVG(m.name, m.eyes, m.isPurple, m.height);
+
+        card.innerHTML = `
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-12 h-14 bg-slate-900 rounded-xl p-1 flex items-center justify-center border border-slate-800">
+              ${svgMarkup}
+            </div>
+            <div>
+              <h3 class="font-heading text-base font-bold ${m.isPurple ? 'text-purple-400' : 'text-amber-300'}">${m.name}</h3>
+              <div class="flex gap-1 mt-0.5">
+                <span class="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded font-bold">${m.height}</span>
+                <span class="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded font-bold">${m.eyes} ${m.eyes === 1 ? 'Olho' : 'Olhos'}</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-[10px] text-slate-300 mb-2 min-h-[28px]">${m.desc}</p>
+
+          <div class="grid grid-cols-2 gap-1 text-[10px] bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+            <div><span class="text-slate-400">HP:</span> <strong class="text-emerald-400">${m.maxHp}</strong></div>
+            <div><span class="text-slate-400">Stamina:</span> <strong class="text-cyan-400">${m.maxStamina}</strong></div>
+            <div><span class="text-slate-400">Atq:</span> <strong class="text-amber-300">${m.attack}</strong></div>
+            <div><span class="text-slate-400">Def:</span> <strong class="text-slate-200">${m.defense}</strong></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function selectCharCard(id, element) {
+      document.querySelectorAll('.char-card').forEach(c => {
+        c.classList.remove('ring-4', 'ring-amber-400', 'bg-amber-500/10');
+      });
+
+      element.classList.add('ring-4', 'ring-amber-400', 'bg-amber-500/10');
+
+      if (selectStep === 1) {
+        selectedP1Id = id;
+      } else {
+        selectedP2Id = id;
+      }
+
+      document.getElementById('btnConfirmSelect').disabled = false;
+    }
+
+    function confirmSelection() {
+      if (selectStep === 1) {
+        selectStep = 2;
+        updateSelectUI();
+      } else {
+        initBattle();
+      }
+    }
+
+    /* ===================================================================
+       4. ESTRUTURA E BARALHO DE 6 CARTAS
+       =================================================================== */
+    function buildInitialDeck() {
+      // Cria o baralho exato de 6 cartas de armas
+      drawDeck = [];
+      trashDeck = [];
+      playerHand = [];
+
+      WEAPON_DECK_PROTOTYPE.forEach(c => {
+        drawDeck.push({ ...c, uid: Math.random().toString(36).substr(2, 9) });
+      });
+
+      // Embaralha as 6 cartas
+      shuffleArray(drawDeck);
+
+      // Compra 3 cartas iniciais para a mão
+      for (let i = 0; i < 3; i++) {
+        if (drawDeck.length > 0) {
+          playerHand.push(drawDeck.pop());
+        }
+      }
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    function initBattle() {
+      const templateP1 = MINION_TEMPLATES.find(m => m.id === selectedP1Id);
+      const templateP2 = MINION_TEMPLATES.find(m => m.id === selectedP2Id);
+
+      p1 = createPlayerInstance(templateP1, 1);
+      p2 = createPlayerInstance(templateP2, 2);
+
+      turnNumber = 1;
+      totalCardsUsed = 0;
+      isProcessingAction = false;
+
+      // Monta o baralho e saca 3 cartas
+      buildInitialDeck();
+
+      // Determina a ordem pela Iniciativa
+      if (p1.initiative >= p2.initiative) {
+        currentTurn = 1;
+      } else {
+        currentTurn = 2;
+      }
+
+      document.getElementById('screenSelect').classList.add('hidden');
+      document.getElementById('screenBattle').classList.remove('hidden');
+      document.getElementById('screenBattle').classList.add('flex');
+      document.getElementById('gameHeaderActions').classList.remove('hidden');
+
+      setupBattleDisplay();
+      logEvent(`⚔️ <strong>Batalha Iniciada!</strong> ${p1.name} vs ${p2.name}.`, 'system');
+
+      startTurn();
+    }
+
+    function createPlayerInstance(template, playerNum) {
+      return {
+        ...template,
+        playerNum: playerNum,
+        hp: template.maxHp,
+        stamina: 0, // Stamina SEMPRE começa em 0
+        effects: [],
+        modifiers: {
+          attackMult: 1.0,
+          defenseMult: 1.0,
+          cantDodge: false,
+          isFrozen: false
+        }
+      };
+    }
+
+    function setupBattleDisplay() {
+      document.getElementById('p1Name').innerText = p1.name;
+      document.getElementById('p1Sprite').innerHTML = generateMinionSVG(p1.name, p1.eyes, p1.isPurple, p1.height);
+
+      document.getElementById('p2Name').innerText = p2.name;
+      document.getElementById('p2Tag').innerText = gameMode === 'pve' ? 'BOT (IA)' : 'P2';
+      document.getElementById('p2Sprite').innerHTML = generateMinionSVG(p2.name, p2.eyes, p2.isPurple, p2.height);
+
+      updateStatusBars();
+      updateDeckUI();
+    }
+
+    function updateDeckUI() {
+      document.getElementById('deckCountBadge').innerText = drawDeck.length;
+      document.getElementById('trashCountBadge').innerText = trashDeck.length;
+    }
+
+    function updateStatusBars() {
+      // P1
+      const p1HpPct = Math.max(0, (p1.hp / p1.maxHp) * 100);
+      document.getElementById('p1HpBar').style.width = `${p1HpPct}%`;
+      document.getElementById('p1HpText').innerText = `${Math.ceil(p1.hp)} / ${p1.maxHp}`;
+
+      const p1StaPct = Math.max(0, (p1.stamina / p1.maxStamina) * 100);
+      document.getElementById('p1StaminaBar').style.width = `${p1StaPct}%`;
+      document.getElementById('p1StaminaText').innerText = `${Math.ceil(p1.stamina)} / ${p1.maxStamina}`;
+
+      // P2
+      const p2HpPct = Math.max(0, (p2.hp / p2.maxHp) * 100);
+      document.getElementById('p2HpBar').style.width = `${p2HpPct}%`;
+      document.getElementById('p2HpText').innerText = `${Math.ceil(p2.hp)} / ${p2.maxHp}`;
+
+      const p2StaPct = Math.max(0, (p2.stamina / p2.maxStamina) * 100);
+      document.getElementById('p2StaminaBar').style.width = `${p2StaPct}%`;
+      document.getElementById('p2StaminaText').innerText = `${Math.ceil(p2.stamina)} / ${p2.maxStamina}`;
+
+      // Status Badges
+      renderStatusEffects(p1, 'p1Buffs', 'p1Sprite');
+      renderStatusEffects(p2, 'p2Buffs', 'p2Sprite');
+    }
+
+    function renderStatusEffects(player, containerId, spriteId) {
+      const container = document.getElementById(containerId);
+      const spriteEl = document.getElementById(spriteId);
+      container.innerHTML = '';
+
+      spriteEl.classList.remove('status-shrunk', 'status-frozen', 'status-poisoned', 'status-burning');
+
+      player.effects.forEach(eff => {
+        let label = '';
+        let badgeClass = 'bg-slate-800 text-slate-300';
+
+        if (eff.type === 'DOT_POISON') {
+          label = `🤢 Veneno (${eff.turns}t)`;
+          badgeClass = 'bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+          spriteEl.classList.add('status-poisoned');
+        } else if (eff.type === 'DEBUFF_SHRINK') {
+          label = `🔬 Encolhido (${eff.turns}t)`;
+          badgeClass = 'bg-amber-950 text-amber-300 border border-amber-500/40';
+          spriteEl.classList.add('status-shrunk');
+        } else if (eff.type === 'STUN_FREEZE') {
+          label = `❄️ Congelado (${eff.turns}t)`;
+          badgeClass = 'bg-cyan-950 text-cyan-300 border border-cyan-500/40';
+          spriteEl.classList.add('status-frozen');
+        } else if (eff.type === 'DEBUFF_JELLY') {
+          label = `🍯 Geléia (${eff.turns}t)`;
+          badgeClass = 'bg-pink-950 text-pink-300 border border-pink-500/40';
+        } else if (eff.type === 'DOT_BLEED') {
+          label = `🪠 Sangria (${eff.turns}t)`;
+          badgeClass = 'bg-red-950 text-red-300 border border-red-500/40';
+        } else if (eff.type === 'DOT_BURN') {
+          label = `🌋 Queimadura (${eff.turns}t)`;
+          badgeClass = 'bg-orange-950 text-orange-300 border border-orange-500/40';
+          spriteEl.classList.add('status-burning');
+        }
+
+        const span = document.createElement('span');
+        span.className = `text-[9px] px-1.5 py-0.2 rounded font-bold ${badgeClass}`;
+        span.innerText = label;
+        container.appendChild(span);
+      });
+    }
+
+    /* ===================================================================
+       5. SISTEMA DE TURNOS, CURA AUTOMÁTICA E COMPRA DE CARTA
+       =================================================================== */
+    function startTurn() {
+      const activePlayer = currentTurn === 1 ? p1 : p2;
+
+      document.getElementById('turnIndicatorText').innerText = `Turno ${turnNumber}: Vez de ${activePlayer.name}`;
+      document.getElementById('activePlayerControlText').innerText = `Vez de ${activePlayer.name}`;
+
+      // 1. REGENERAÇÃO AUTOMÁTICA DE STAMINA (+10 POR TURNO)
+      if (activePlayer.stamina < activePlayer.maxStamina) {
+        const regenAmount = Math.min(10, activePlayer.maxStamina - activePlayer.stamina);
+        activePlayer.stamina += regenAmount;
+        spawnFloatingText(`+${regenAmount} Stamina`, activePlayer.playerNum, '#38bdf8');
+      }
+
+      // 2. CURA AUTOMÁTICA POR STAMINA (DE 5 EM 5)
+      if (activePlayer.hp < activePlayer.maxHp && activePlayer.stamina >= 5) {
+        let consumedSta = 0;
+        let totalHeal = 0;
+
+        while (activePlayer.stamina >= 5 && (activePlayer.hp + totalHeal) < activePlayer.maxHp) {
+          activePlayer.stamina -= 5;
+          consumedSta += 5;
+          totalHeal += 5;
+        }
+
+        if (totalHeal > 0) {
+          activePlayer.hp = Math.min(activePlayer.maxHp, activePlayer.hp + totalHeal);
+          spawnFloatingText(`+${totalHeal} HP`, activePlayer.playerNum, '#34d399');
+          logEvent(`💚 <strong>${activePlayer.name}</strong> se curou automaticamente em <strong>+${totalHeal} HP</strong> gastando ${consumedSta} Stamina!`, 'heal');
+        }
+      }
+
+      // Processa efeitos DOT acumulados (veneno, queimadura, sangria)
+      processTurnStartEffects(activePlayer);
+
+      if (activePlayer.hp <= 0) {
+        checkGameOver();
+        return;
+      }
+
+      // Se estiver congelado -> Pula o Turno
+      if (activePlayer.modifiers.isFrozen) {
+        logEvent(`❄️ <strong>${activePlayer.name}</strong> está congelado e pulou o turno!`, 'warn');
+        activePlayer.modifiers.isFrozen = false;
+        activePlayer.effects = activePlayer.effects.filter(e => e.type !== 'STUN_FREEZE');
+        setTimeout(() => endTurn(), 1100);
+        return;
+      }
+
+      // Renderiza as 3 cartas mantidas na mão
+      renderHandCards();
+
+      // IA em modo PvE
+      if (gameMode === 'pve' && currentTurn === 2) {
+        setHandCardsDisabled(true);
+        setTimeout(() => executeAITurn(), 1100);
+      } else {
+        setHandCardsDisabled(false);
+      }
+    }
+
+    function processTurnStartEffects(player) {
+      player.effects.forEach(eff => {
+        if (eff.type === 'DOT_POISON' || eff.type === 'DOT_BLEED' || eff.type === 'DOT_BURN') {
+          player.hp = Math.max(0, player.hp - eff.val);
+          spawnFloatingText(`-${eff.val}`, player.playerNum, '#ef4444');
+          shakeSprite(player.playerNum);
+          logEvent(`🧪 <strong>${player.name}</strong> sofreu ${eff.val} de dano continuo!`, 'damage');
+        }
+        eff.turns -= 1;
+      });
+
+      player.effects = player.effects.filter(eff => {
+        if (eff.turns <= 0) {
+          if (eff.type === 'DEBUFF_SHRINK') {
+            player.modifiers.attackMult = 1.0;
+            player.modifiers.defenseMult = 1.0;
+            logEvent(`✨ <strong>${player.name}</strong> voltou ao tamanho normal!`, 'system');
+          }
+          if (eff.type === 'DEBUFF_JELLY') {
+            player.modifiers.cantDodge = false;
+          }
+          return false;
+        }
+        return true;
+      });
+
+      updateStatusBars();
+    }
+
+    /* Desenha as 3 cartas na mão mantendo a posição */
+    function renderHandCards() {
+      const container = document.getElementById('cardsHandContainer');
+      container.innerHTML = '';
+
+      playerHand.forEach((card, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = `card-hand-item flex-1 max-w-[210px] p-2.5 rounded-2xl bg-gradient-to-b ${card.color} border-2 ${card.borderColor} shadow-lg flex flex-col justify-between text-left h-36 relative overflow-hidden`;
+        cardEl.onclick = () => handlePlayCard(index);
+
+        cardEl.innerHTML = `
+          <div class="flex justify-between items-start">
+            <span class="text-2xl bg-black/30 p-1 rounded-xl border border-white/10">${card.icon}</span>
+            <span class="text-[9px] bg-black/50 text-amber-200 px-1.5 py-0.2 rounded font-bold uppercase">${card.damageLabel}</span>
+          </div>
+          <div class="mt-1">
+            <h4 class="font-heading font-bold text-white text-xs tracking-wide leading-tight">${card.name}</h4>
+            <p class="text-[10px] text-white/85 line-clamp-2 leading-tight mt-0.5">${card.desc}</p>
+          </div>
+          <button class="w-full mt-1 py-1 rounded-lg bg-black/40 hover:bg-black/60 text-[10px] font-bold text-amber-300 border border-white/10 transition uppercase">
+            Usar Arma ⚡
+          </button>
+        `;
+        container.appendChild(cardEl);
+      });
+
+      updateDeckUI();
+    }
+
+    function setHandCardsDisabled(disabled) {
+      document.querySelectorAll('.card-hand-item').forEach(el => {
+        if (disabled) {
+          el.classList.add('opacity-40', 'pointer-events-none');
+        } else {
+          el.classList.remove('opacity-40', 'pointer-events-none');
+        }
+      });
+      document.getElementById('btnPassTurn').disabled = disabled;
+    }
+
+    /* Compra 1 única carta do Baralho para repor a jogada */
+    function drawSingleCard() {
+      // Se o Baralho estiver vazio -> Reembaralha a Pilha de Lixo
+      if (drawDeck.length === 0) {
+        if (trashDeck.length > 0) {
+          drawDeck = [...trashDeck];
+          trashDeck = [];
+          shuffleArray(drawDeck);
+          logEvent(`🔄 <strong>Baralho Reembaralhado!</strong> As cartas jogadas no lixo voltaram para o deck!`, 'system');
+        } else {
+          logEvent(`⚠️ Não há mais cartas no lixo para reembaralhar.`, 'warn');
+          return null;
+        }
+      }
+      return drawDeck.pop();
+    }
+
+    /* ===================================================================
+       6. EXECUÇÃO DA CARTA E REGRA DE ATAQUE
+       =================================================================== */
+    function handlePlayCard(cardIndex) {
+      if (isProcessingAction) return;
+      isProcessingAction = true;
+      setHandCardsDisabled(true);
+
+      const attacker = currentTurn === 1 ? p1 : p2;
+      const defender = currentTurn === 1 ? p2 : p1;
+      const card = playerHand[cardIndex];
+
+      totalCardsUsed++;
+      logEvent(`🃏 <strong>${attacker.name}</strong> usou <strong>[${card.name}]</strong>!`, 'system');
+
+      // REGRA: A carta usada sai da mão e vai para o LIXO
+      trashDeck.push(card);
+
+      // EXECUÇÃO DAS ARMAS
+      lungeSprite(attacker.playerNum);
+
+      setTimeout(() => {
+        // Checa Esquiva do Inimigo
+        const rollDodge = Math.random() * 100;
+        if (!defender.modifiers.cantDodge && rollDodge < defender.dodgeChance && card.type !== 'STUN_FREEZE') {
+          spawnFloatingText('ESQUIVOU!', defender.playerNum, '#38bdf8');
+          logEvent(`💨 <strong>${defender.name}</strong> esquivou do ataque!`, 'system');
+          finishCardPlay(cardIndex);
+          return;
+        }
+
+        if (card.type === 'DOT_POISON') {
+          defender.effects.push({ type: 'DOT_POISON', turns: 3, val: 14 });
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#22c55e');
+
+        } else if (card.type === 'DEBUFF_SHRINK') {
+          defender.effects.push({ type: 'DEBUFF_SHRINK', turns: 2, val: 0 });
+          defender.modifiers.attackMult = 0.65;
+          defender.modifiers.defenseMult = 0.65;
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#eab308');
+
+        } else if (card.type === 'STUN_FREEZE') {
+          defender.effects.push({ type: 'STUN_FREEZE', turns: 1, val: 0 });
+          defender.modifiers.isFrozen = true;
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#38bdf8');
+
+        } else if (card.type === 'DEBUFF_JELLY') {
+          defender.effects.push({ type: 'DEBUFF_JELLY', turns: 2, val: 0 });
+          defender.modifiers.cantDodge = true;
+          defender.hp = Math.max(0, defender.hp - 10);
+          spawnFloatingText('-10', defender.playerNum, '#ec4899');
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#ec4899');
+
+        } else if (card.type === 'DOT_BLEED') {
+          defender.effects.push({ type: 'DOT_BLEED', turns: 2, val: 18 });
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#ef4444');
+
+        } else if (card.type === 'DOT_BURN') {
+          defender.effects.push({ type: 'DOT_BURN', turns: 2, val: 26 });
+          renderLaserBeam(attacker.playerNum, defender.playerNum, '#f97316');
+        }
+
+        shakeSprite(defender.playerNum);
+        finishCardPlay(cardIndex);
+
+      }, 250);
+    }
+
+    function finishCardPlay(playedCardIndex) {
+      updateStatusBars();
+
+      if (checkGameOver()) return;
+
+      // REGRA: Repõe APENAS 1 nova carta sacada no lugar da carta usada
+      const newCard = drawSingleCard();
+      if (newCard) {
+        playerHand[playedCardIndex] = newCard;
+      } else {
+        playerHand.splice(playedCardIndex, 1);
+      }
+
+      setTimeout(() => endTurn(), 850);
+    }
+
+    function handleAction(actionType) {
+      if (actionType === 'pass') {
+        const attacker = currentTurn === 1 ? p1 : p2;
+        logEvent(`🛡️ <strong>${attacker.name}</strong> passou o turno.`, 'system');
+        setHandCardsDisabled(true);
+        setTimeout(() => endTurn(), 600);
+      }
+    }
+
+    function executeAITurn() {
+      // IA escolhe aleatoriamente ou usa cura se o HP estiver baixo
+      const bot = p2;
+      let chosenCardIndex = 0;
+
+      const healIndex = playerHand.findIndex(c => c.type === 'HEAL_STAMINA');
+      if (bot.hp < bot.maxHp * 0.4 && healIndex !== -1 && bot.stamina >= 10) {
+        chosenCardIndex = healIndex;
+      } else {
+        chosenCardIndex = Math.floor(Math.random() * playerHand.length);
+      }
+
+      handlePlayCard(chosenCardIndex);
+    }
+
+    /* ===================================================================
+       7. FIM DE JOGO E ANIMAÇÕES VISUAIS
+       =================================================================== */
+    function endTurn() {
+      currentTurn = currentTurn === 1 ? 2 : 1;
+      turnNumber++;
+      isProcessingAction = false;
+      startTurn();
+    }
+
+    function checkGameOver() {
+      if (p1.hp <= 0 || p2.hp <= 0) {
+        const p1Won = p2.hp <= 0;
+        const winner = p1Won ? p1.name : p2.name;
+
+        document.getElementById('winnerTitle').innerText = `🏆 ${winner} Venceu!`;
+        document.getElementById('winnerDesc').innerText = p1Won
+          ? 'Vitória do Jogador 1!'
+          : (gameMode === 'pve' ? 'A Inteligência Artificial venceu o duelo!' : 'Vitória do Jogador 2!');
+
+        document.getElementById('statTurnCount').innerText = turnNumber;
+        document.getElementById('statCardsUsed').innerText = totalCardsUsed;
+
+        document.getElementById('modalGameOver').classList.remove('hidden');
+        document.getElementById('modalGameOver').classList.add('flex');
+        return true;
+      }
+      return false;
+    }
+
+    function restartBattle() {
+      document.getElementById('modalGameOver').classList.add('hidden');
+      initBattle();
+    }
+
+    function logEvent(text, type = 'info') {
+      const log = document.getElementById('combatLog');
+      const entry = document.createElement('div');
+      entry.className = `p-1 rounded-lg text-[11px] border ${
+        type === 'damage' ? 'bg-red-950/40 text-red-200 border-red-800/40' :
+        type === 'heal' ? 'bg-emerald-950/40 text-emerald-200 border-emerald-800/40' :
+        type === 'warn' ? 'bg-amber-950/40 text-amber-200 border-amber-800/40' :
+        'bg-slate-900/80 text-slate-200 border-slate-800'
+      }`;
+      entry.innerHTML = text;
+      log.prepend(entry);
+    }
+
+    function spawnFloatingText(text, playerNum, colorHex) {
+      const container = document.getElementById(playerNum === 1 ? 'p1FloatingBox' : 'p2FloatingBox');
+      const el = document.createElement('div');
+      el.className = 'floating-text';
+      el.innerText = text;
+      el.style.color = colorHex;
+      el.style.left = `${30 + Math.random() * 40}%`;
+      el.style.top = '20%';
+      container.appendChild(el);
+
+      setTimeout(() => el.remove(), 1200);
+    }
+
+    function shakeSprite(playerNum) {
+      const sprite = document.getElementById(playerNum === 1 ? 'p1Sprite' : 'p2Sprite');
+      sprite.classList.add('hit-shake');
+      setTimeout(() => sprite.classList.remove('hit-shake'), 350);
+    }
+
+    function lungeSprite(playerNum) {
+      const wrap = document.getElementById(playerNum === 1 ? 'p1SpriteWrap' : 'p2SpriteWrap');
+      const lungeClass = playerNum === 1 ? 'lunge-p1' : 'lunge-p2';
+      wrap.classList.add(lungeClass);
+      setTimeout(() => wrap.classList.remove(lungeClass), 350);
+    }
+
+    function renderLaserBeam(fromP, toP, color) {
+      const canvas = document.getElementById('fxCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const p1Rect = document.getElementById('p1Sprite').getBoundingClientRect();
+      const p2Rect = document.getElementById('p2Sprite').getBoundingClientRect();
+
+      const startX = fromP === 1 ? p1Rect.left + p1Rect.width/2 : p2Rect.left + p2Rect.width/2;
+      const startY = fromP === 1 ? p1Rect.top + p1Rect.height/2 : p2Rect.top + p2Rect.height/2;
+
+      const endX = toP === 1 ? p1Rect.left + p1Rect.width/2 : p2Rect.left + p2Rect.width/2;
+      const endY = toP === 1 ? p1Rect.top + p1Rect.height/2 : p2Rect.top + p2Rect.height/2;
+
+      let progress = 0;
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(startX + (endX - startX) * progress, startY + (endY - startY) * progress);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 6;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        progress += 0.25;
+        if (progress <= 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 120);
+        }
+      }
+      animate();
+    }
+
+    function initBgCanvas() {
+      const canvas = document.getElementById('bgCanvas');
+      const ctx = canvas.getContext('2d');
+      let particles = [];
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      for (let i = 0; i < 30; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 2 + 1,
+          color: Math.random() > 0.5 ? '#facc15' : '#a855f7',
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3
+        });
+      }
+
+      function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+          if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = 0.3;
+          ctx.fill();
+        });
+        requestAnimationFrame(loop);
+      }
+      loop();
+    }
+  </script>
+</body>
+</html>
